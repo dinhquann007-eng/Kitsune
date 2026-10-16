@@ -1,0 +1,336 @@
+
+-- Doi | Crimson Galaxy VFX
+-- Roblox Studio: StarterPlayer > StarterPlayerScripts
+-- Theo dõi hiệu ứng mới, không quét liên tục mỗi frame.
+-- Dành cho trải nghiệm bạn sở hữu hoặc được phép chỉnh sửa.
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local GUI_NAME = "Doi_CrimsonGalaxy"
+local previous = playerGui:FindFirstChild(GUI_NAME)
+if previous then previous:Destroy() end
+
+local COLORS = {
+    Crimson = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 15, 55)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 65, 105)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 35))
+    }),
+    Galaxy = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 30, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 220, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 45, 225))
+    })
+}
+
+local theme = "Crimson"
+local enabled = true
+local tracked = setmetatable({}, {__mode = "k"})
+local original = setmetatable({}, {__mode = "k"})
+local connections = {}
+local alive = true
+
+local function rememberConnection(c)
+    table.insert(connections, c)
+    return c
+end
+
+local function isColorEffect(obj)
+    return obj:IsA("ParticleEmitter")
+        or obj:IsA("Trail")
+        or obj:IsA("Beam")
+end
+
+local keywords = {
+    "skill", "effect", "vfx", "slash", "attack",
+    "aura", "projectile", "beam", "hit", "ability",
+    "fire", "lightning", "explosion", "magic"
+}
+
+local function matchesEffect(obj)
+    local current = obj
+    for _ = 1, 7 do
+        if not current then break end
+        local name = string.lower(current.Name)
+
+        for _, word in ipairs(keywords) do
+            if string.find(name, word, 1, true) then
+                return true
+            end
+        end
+
+        current = current.Parent
+    end
+    return false
+end
+
+local function restore(obj)
+    local saved = original[obj]
+    if not saved or not obj.Parent then return end
+
+    pcall(function()
+        obj.Color = saved
+    end)
+
+    tracked[obj] = nil
+end
+
+local function apply(obj)
+    if not alive or not enabled or not obj.Parent then return end
+    if not isColorEffect(obj) or not matchesEffect(obj) then return end
+
+    if original[obj] == nil then
+        local ok, color = pcall(function()
+            return obj.Color
+        end)
+        if not ok then return end
+        original[obj] = color
+    end
+
+    if tracked[obj] == theme then return end
+
+    local ok = pcall(function()
+        obj.Color = COLORS[theme]
+    end)
+
+    if ok then
+        tracked[obj] = theme
+    end
+end
+
+local function scanNewObject(obj)
+    if not alive then return end
+
+    if isColorEffect(obj) then
+        apply(obj)
+    end
+
+    -- Một lần kiểm tra con của cụm hiệu ứng mới, không chạy theo frame.
+    for _, child in ipairs(obj:GetDescendants()) do
+        if isColorEffect(child) then
+            apply(child)
+        end
+    end
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = GUI_NAME
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 100
+gui.Parent = playerGui
+
+local function round(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius)
+    c.Parent = obj
+end
+
+local function stroke(obj, color)
+    local s = Instance.new("UIStroke")
+    s.Color = color
+    s.Thickness = 1.5
+    s.Parent = obj
+    return s
+end
+
+local logo = Instance.new("TextButton")
+logo.Name = "DoiLogo"
+logo.Size = UDim2.fromOffset(50, 50)
+logo.Position = UDim2.new(0, 20, 0.45, 0)
+logo.BackgroundColor3 = Color3.fromRGB(20, 17, 30)
+logo.Text = "😈"
+logo.TextSize = 28
+logo.Font = Enum.Font.GothamBold
+logo.TextColor3 = Color3.new(1, 1, 1)
+logo.Parent = gui
+round(logo, 13)
+local logoStroke = stroke(logo, Color3.fromRGB(255, 15, 55))
+
+local menu = Instance.new("Frame")
+menu.Name = "DoiMenu"
+menu.Size = UDim2.fromOffset(235, 220)
+menu.Position = UDim2.new(0, 80, 0.45, -80)
+menu.BackgroundColor3 = Color3.fromRGB(18, 16, 27)
+menu.Visible = false
+menu.Parent = gui
+round(menu, 12)
+local menuStroke = stroke(menu, Color3.fromRGB(255, 15, 55))
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -20, 0, 35)
+title.Position = UDim2.fromOffset(10, 4)
+title.BackgroundTransparency = 1
+title.Text = "DOI  •  VFX COLOR"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = menu
+
+local function makeButton(name, text, y)
+    local b = Instance.new("TextButton")
+    b.Name = name
+    b.Size = UDim2.new(1, -24, 0, 36)
+    b.Position = UDim2.fromOffset(12, y)
+    b.BackgroundColor3 = Color3.fromRGB(42, 36, 55)
+    b.Text = text
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamSemibold
+    b.TextSize = 13
+    b.Parent = menu
+    round(b, 8)
+    return b
+end
+
+local redButton = makeButton("Crimson", "CRIMSON  •  ĐỎ ĐẬM", 43)
+local galaxyButton = makeButton("Galaxy", "GALAXY  •  VŨ TRỤ", 84)
+local toggleButton = makeButton("EffectsToggle", "HIỆU ỨNG: BẬT", 125)
+local restoreButton = makeButton("Restore", "KHÔI PHỤC MÀU GỐC", 166)
+
+local function updateTheme()
+    local color = theme == "Crimson"
+        and Color3.fromRGB(255, 25, 65)
+        or Color3.fromRGB(150, 65, 255)
+
+    logoStroke.Color = color
+    menuStroke.Color = color
+    redButton.BackgroundColor3 = theme == "Crimson"
+        and color or Color3.fromRGB(42, 36, 55)
+    galaxyButton.BackgroundColor3 = theme == "Galaxy"
+        and color or Color3.fromRGB(42, 36, 55)
+    toggleButton.Text = enabled and "HIỆU ỨNG: BẬT" or "HIỆU ỨNG: TẮT"
+    toggleButton.BackgroundColor3 = enabled
+        and Color3.fromRGB(35, 90, 65)
+        or Color3.fromRGB(100, 40, 45)
+end
+
+local function refreshTracked()
+    for obj in pairs(original) do
+        if obj.Parent and isColorEffect(obj) then
+            if enabled then
+                apply(obj)
+            else
+                restore(obj)
+            end
+        end
+    end
+end
+
+redButton.Activated:Connect(function()
+    theme = "Crimson"
+    updateTheme()
+    refreshTracked()
+end)
+
+galaxyButton.Activated:Connect(function()
+    theme = "Galaxy"
+    updateTheme()
+    refreshTracked()
+end)
+
+toggleButton.Activated:Connect(function()
+    enabled = not enabled
+    updateTheme()
+    refreshTracked()
+end)
+
+restoreButton.Activated:Connect(function()
+    for obj in pairs(original) do
+        restore(obj)
+    end
+end)
+
+local open = false
+logo.Activated:Connect(function()
+    open = not open
+    menu.Visible = open
+end)
+
+-- Kéo logo và menu cùng nhau bằng chuột/cảm ứng.
+local dragging = false
+local moved = false
+local dragInput
+local dragStart
+local startPosition
+
+logo.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        moved = false
+        dragInput = input
+        dragStart = input.Position
+        startPosition = logo.Position
+    end
+end)
+
+rememberConnection(UserInputService.InputChanged:Connect(function(input)
+    if not dragging then return end
+
+    local mouseMove = input.UserInputType ==
+        Enum.UserInputType.MouseMovement
+    local touchMove = input.UserInputType ==
+        Enum.UserInputType.Touch and input == dragInput
+
+    if mouseMove or touchMove then
+        local delta = input.Position - dragStart
+        if delta.Magnitude > 5 then moved = true end
+
+        if moved then
+            logo.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
+
+            menu.Position = UDim2.new(
+                logo.Position.X.Scale,
+                logo.Position.X.Offset + 60,
+                logo.Position.Y.Scale,
+                logo.Position.Y.Offset - 80
+            )
+        end
+    end
+end))
+
+rememberConnection(UserInputService.InputEnded:Connect(function(input)
+    if input == dragInput
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+        dragInput = nil
+    end
+end))
+
+-- Bắt cụm hiệu ứng mới được thêm vào Workspace.
+rememberConnection(Workspace.DescendantAdded:Connect(function(obj)
+    task.defer(function()
+        if alive and obj.Parent then
+            scanNewObject(obj)
+        end
+    end)
+end))
+
+-- Quét một lần lúc khởi tạo để bắt các hiệu ứng đã tồn tại.
+for _, obj in ipairs(Workspace:GetDescendants()) do
+    if isColorEffect(obj) then
+        apply(obj)
+    end
+end
+
+updateTheme()
+
+gui.Destroying:Connect(function()
+    alive = false
+    for _, connection in ipairs(connections) do
+        connection:Disconnect()
+    end
+end)
+
+print("Doi VFX Color đã sẵn sàng.")
